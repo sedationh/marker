@@ -69,6 +69,15 @@ def page_count(pdf_file):
     doc = open_pdf(pdf_file)
     return len(doc)
 
+# Add this new function to handle Marker execution
+def run_marker_process(in_file, languages, max_pages, ocr_all_pages, start_page):
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_pdf:
+        temp_pdf.write(in_file.getvalue())
+        temp_pdf.seek(0)
+        filename = temp_pdf.name
+        print(f"start_page: {start_page}")
+        md_text, images, out_meta = convert_pdf(filename, languages, max_pages, ocr_all_pages, start_page)
+    return markdown_insert_images(md_text, images)
 
 st.set_page_config(layout="wide")
 col1, col2 = st.columns([.5, .5])
@@ -97,25 +106,19 @@ filetype = in_file.type
 
 with col1:
     page_count = page_count(in_file)
-    page_number = st.number_input(f"Page number out of {page_count}:", min_value=1, value=1, max_value=page_count)
+    page_number = st.number_input(f"Page number out of {page_count}:", min_value=1, value=1, max_value=page_count, key="page_number")
     pil_image = get_page_image(in_file, page_number)
 
     st.image(pil_image, caption="PDF file (preview)", use_column_width=True)
 
-run_marker = st.sidebar.button("Run Marker")
+# Replace the manual trigger with an automatic one based on page number changes
+if 'last_page_number' not in st.session_state:
+    st.session_state.last_page_number = page_number
 
-if not run_marker:
-    st.stop()
-
-# Run Marker
-with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_pdf:
-    temp_pdf.write(in_file.getvalue())
-    temp_pdf.seek(0)
-    filename = temp_pdf.name
+if page_number != st.session_state.last_page_number:
+    st.session_state.last_page_number = page_number
     start_page = page_number - 1 if convert_from_current_page else None
-    print(f"start_page: {start_page}")
-    md_text, images, out_meta = convert_pdf(filename, languages, max_pages, ocr_all_pages, start_page)
-md_text = markdown_insert_images(md_text, images)
+    md_text = run_marker_process(in_file, languages, max_pages, ocr_all_pages, start_page)
 
-with col2:
-    st.markdown(f'<div id="markdown_container" contenteditable="true">{md_text}</div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div id="markdown_container" contenteditable="true">{md_text}</div>', unsafe_allow_html=True)
